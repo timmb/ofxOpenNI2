@@ -18,15 +18,18 @@ public:
 	void update();
 	void draw(int x, int y);
 	void drawRGB(int x, int y);
+	void drawIR(int x, int y);
 
 	void setUseTexture(bool useTexture);
 
-	ofPixels & getDepthPixels();
-	ofShortPixels & getDepthRawPixels();
+	ofShortPixels & getDepthPixels();
 	ofPixels & getRGBPixels();
+//	ofShortPixels & getIRPixels();
+	ofPixels & getIRPixels();
 	
 	ofTexture & getDepthTextureReference();
 	ofTexture & getRGBTextureReference();
+	ofTexture & getIRTextureReference();
 
 	ofMesh & getPointCloud();
 	void setGeneratePCColors(bool generateColors);
@@ -34,19 +37,6 @@ public:
 
 	float getWidth();
 	float getHeight();
-
-	enum DepthColoring {
-		COLORING_PSYCHEDELIC_SHADES = 0,
-		COLORING_PSYCHEDELIC,
-		COLORING_RAINBOW,
-		COLORING_CYCLIC_RAINBOW,
-		COLORING_BLUES,
-		COLORING_GREY,
-		COLORING_STATUS,
-		COLORING_COUNT
-	};
-
-	void setDepthColoring(DepthColoring coloring);
 
 	bool toggleCalibratedRGBDepth();
 	bool enableCalibratedRGBDepth();
@@ -87,9 +77,10 @@ private:
 	void readFrame();
 	void generateDepthPixels();
 	void generateImagePixels();
+	void generateIRPixels();
 	void allocateDepthBuffers();
-	void allocateDepthRawBuffers();
 	void allocateRGBBuffers();
+	void allocateIRBuffers();
 
 	static void XN_CALLBACK_TYPE onErrorStateChanged(XnStatus errorState, void* pCookie);
 
@@ -121,7 +112,6 @@ private:
 	bool g_bIsIROn;
 	bool g_bIsAudioOn;
 	bool g_bIsPlayerOn;
-	bool g_bIsDepthRawOnOption;
 
 	xn::Device g_Device;
 	xn::DepthGenerator g_Depth;
@@ -148,19 +138,23 @@ private:
 
 	// depth
 	ofTexture depthTexture;
-	ofPixels depthPixels[2];
-	ofPixels * backDepthPixels, * currentDepthPixels;
-	DepthColoring depth_coloring;
+	ofShortPixels depthPixels[2];
+public: //TODO: unhack
+	ofShortPixels * backDepthPixels, * currentDepthPixels;
+private:
 	float	max_depth;
-	
-	// depth raw
-	ofShortPixels depthRawPixels[2];
-	ofShortPixels * backDepthRawPixels, * currentDepthRawPixels;
 
 	// rgb
 	ofTexture rgbTexture;
 	ofPixels rgbPixels[2];
 	ofPixels * backRGBPixels, * currentRGBPixels;
+
+  // ir
+	ofTexture irTexture;
+//	ofShortPixels irPixels[2];
+//	ofShortPixels * backIRPixels, * currentIRPixels;
+	ofPixels irPixels[2];
+	ofPixels * backIRPixels, * currentIRPixels;
 
 	// point cloud
 	ofMesh pointCloud;

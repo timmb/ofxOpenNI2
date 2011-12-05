@@ -241,3 +241,4 @@ XnStatus ofxOpenNICapture::captureFrame(){
 void ofxOpenNICapture::update(){
 	captureFrame();
 }
+

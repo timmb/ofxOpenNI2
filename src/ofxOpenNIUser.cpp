@@ -41,7 +41,7 @@ ofxOpenNIUser::ofxOpenNIUser(){
 }
 
 //----------------------------------------
-void ofxOpenNIUser::debugDraw() {
+void ofxOpenNIUser::draw() {
 
 	for(int i=0;i<NumLimbs;i++){
 		limbs[i].debugDraw();

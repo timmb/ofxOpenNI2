@@ -32,15 +32,15 @@ public:
 
 	// position in projective coordinates
 	ofPoint begin,end;
+  bool found;
 
 	// position in real world coordinates
 	ofPoint worldBegin, worldEnd;
-	bool found;
 
 	vector<ofxOpenNILimb*> jointLimbs;
 
 	void debugDraw() {
-		if(!found)
+		if(found==false)
 			return;
 		ofPushStyle();
 		ofSetLineWidth(5);
@@ -86,6 +86,16 @@ public:
 		NumLimbs
 	};
 
+  enum TrackingState {
+    Invalid     = 0,
+    Lost        = 1 << 0,
+    Found       = 1 << 1,
+    NeedsPose   = 1 << 2,
+    Calibrating = 1 << 3,
+    Tracking    = 1 << 4
+  };
+  TrackingState state;  
+
 	int id;
 	//bool skeletonTracking, skeletonCalibrating, skeletonCalibrated;
 	ofPoint center;
@@ -96,6 +106,5 @@ public:
 	ofxOpenNILimb & getLimb(Limb limb);
 	int getNumLimbs();
 
-	void debugDraw();
-
+	void draw();
 };

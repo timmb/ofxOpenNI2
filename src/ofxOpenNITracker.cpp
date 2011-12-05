@@ -25,18 +25,23 @@ void XN_CALLBACK_TYPE ofxOpenNITracker::User_NewUser(xn::UserGenerator& rGenerat
 	ofLogVerbose(LOG_NAME) << "New User" << nID;
 
 	ofxOpenNITracker* tracker = static_cast<ofxOpenNITracker*>(pCookie);
-	if(tracker->needsPoseForCalibration()) {
+  tracker->setUserState(nID, ofxOpenNIUser::Found);
+  if(tracker->loadCalibrationData(nID))
+    tracker->startTracking(nID);
+	else if(tracker->needsPoseForCalibration())
 		tracker->startPoseDetection(nID);
-	} else {
-		tracker->requestCalibration(nID);
-	}
+	else
+    tracker->startTracking(nID);
+//		tracker->requestCalibration(nID);
 }
 
 //----------------------------------------
 void XN_CALLBACK_TYPE ofxOpenNITracker::User_LostUser(xn::UserGenerator& rGenerator, XnUserID nID, void* pCookie){
 	ofLogVerbose(LOG_NAME) << "Lost user" << nID;
-	rGenerator.GetSkeletonCap().Reset(nID);
 
+	ofxOpenNITracker* tracker = static_cast<ofxOpenNITracker*>(pCookie);
+	rGenerator.GetSkeletonCap().Reset(nID);
+  tracker->setUserState(nID, ofxOpenNIUser::Lost);
 }
 
 //----------------------------------------
@@ -58,20 +63,16 @@ void XN_CALLBACK_TYPE ofxOpenNITracker::UserCalibration_CalibrationStart(xn::Ske
 void XN_CALLBACK_TYPE ofxOpenNITracker::UserCalibration_CalibrationEnd(xn::SkeletonCapability& rCapability, XnUserID nID, XnCalibrationStatus bSuccess, void* pCookie){
 	ofxOpenNITracker* tracker = static_cast<ofxOpenNITracker*>(pCookie);
 	if(bSuccess == XN_CALIBRATION_STATUS_OK) {
-		ofLogVerbose(LOG_NAME) << "+++++++++++++++++++++++ Succesfully tracked user:" << nID;
+		ofLogVerbose(LOG_NAME) << "+++++++++++++++++++++++ Successfully tracked user:" << nID;
+    tracker->saveCalibrationData(nID, false);
 		tracker->startTracking(nID);
 	} else {
-		if(tracker->needsPoseForCalibration()) {
+		if(tracker->needsPoseForCalibration())
 			tracker->startPoseDetection(nID);
-		} else {
+		else
 			tracker->requestCalibration(nID);
-		}
 	}
 }
-
-
-
-
 
 //----------------------------------------
 ofxOpenNITracker::ofxOpenNITracker(){
@@ -208,25 +209,36 @@ float ofxOpenNITracker::getSmoothing(){
 
 //----------------------------------------
 void ofxOpenNITracker::update(){
-	vector<XnUserID> users(MAX_NUMBER_USERS);
-	XnUInt16 max_users = MAX_NUMBER_USERS;
-	user_generator.GetUsers(&users[0], max_users);
+	vector<XnUserID> userIds(MAX_NUMBER_USERS);
+  XnUInt16 nUsers = userIds.size();
+	user_generator.GetUsers(&userIds[0], nUsers);
+  userIds.resize(nUsers);
 
-	set<XnUserID> current_tracked_users;
+  unsigned int stateHasMask = (ofxOpenNIUser::Found |
+                               ofxOpenNIUser::NeedsPose |
+                               ofxOpenNIUser::Calibrating |
+                               ofxOpenNIUser::Tracking);
 
-	for(int i = 0; i < MAX_NUMBER_USERS; ++i) {
-		if(user_generator.GetSkeletonCap().IsTracking(users[i])) {
-			ofxOpenNIUser & user = tracked_users[users[i]];
-			user.id = users[i];
+	for(int i = 0; i < nUsers; ++i) {
+    unsigned int nID = userIds[i];
+    ofxOpenNIUser& user = users[nID];
+
+		if((user.state & stateHasMask)) {
+			user.id = nID;
 			XnPoint3D center;
-			user_generator.GetCoM(users[i], center);
+			user_generator.GetCoM(nID, center);
 			user.center = toOf(center);
 
+			if (usePointClouds) updatePointClouds(user);
+			if (useMaskPixels) updateUserPixels(user);
+    }
+
+		if(user.state == ofxOpenNIUser::Tracking) {
 			for(int j=0;j<ofxOpenNIUser::NumLimbs;j++){
 				XnSkeletonJointPosition a,b;
-				user_generator.GetSkeletonCap().GetSkeletonJointPosition(user.id, user.limbs[j].start_joint, a);
-				user_generator.GetSkeletonCap().GetSkeletonJointPosition(user.id, user.limbs[j].end_joint, b);
-				user_generator.GetSkeletonCap().GetSkeletonJointOrientation(user.id,user.limbs[j].start_joint, user.limbs[j].orientation);
+				user_generator.GetSkeletonCap().GetSkeletonJointPosition(nID, user.limbs[j].start_joint, a);
+				user_generator.GetSkeletonCap().GetSkeletonJointPosition(nID, user.limbs[j].end_joint, b);
+				user_generator.GetSkeletonCap().GetSkeletonJointOrientation(nID, user.limbs[j].start_joint, user.limbs[j].orientation);
 				if(a.fConfidence < 0.3f || b.fConfidence < 0.3f) {
 					user.limbs[j].found = false;
 					continue;
@@ -238,23 +250,15 @@ void ofxOpenNITracker::update(){
 				user.limbs[j].worldBegin = toOf(a.position);
 				user.limbs[j].worldEnd = toOf(b.position);
 			}
-
-			if (usePointClouds) updatePointClouds(user);
-			if (useMaskPixels) updateUserPixels(user);
-
-			current_tracked_users.insert(user.id);
 		}
 	}
 
-	set<XnUserID>::iterator it;
-	for(it=prev_tracked_users.begin();it!=prev_tracked_users.end();it++){
-		if(current_tracked_users.find(*it)==current_tracked_users.end()){
-			tracked_users.erase(*it);
+	map<XnUserID, ofxOpenNIUser>::iterator it;
+	for(it=users.begin();it!=users.end();it++){
+		if(std::find(userIds.begin(), userIds.end(), it->first)!=userIds.end()){
+			users.erase(it);
 		}
 	}
-
-	prev_tracked_users = current_tracked_users;
-	tracked_users_index.assign(prev_tracked_users.begin(),prev_tracked_users.end());
 
 	//if (useMaskPixels) updateUserPixels();
 }
@@ -286,7 +290,7 @@ void ofxOpenNITracker::updatePointClouds(ofxOpenNIUser & user) {
 	user.pointCloud.setMode(OF_PRIMITIVE_POINTS);
 
 	for (int nY = 0; nY < height; nY += step) {
-		for (int nX = 0; nX < width; nX += step, nIndex += step) {
+		for (int nX = 0; nX < width; nX += step, nIndex++) {
 			if (userPix[nIndex] == user.id) {
 				user.pointCloud.addVertex(ofPoint( nX,nY,pDepth[nIndex] ));
 				ofColor color;
@@ -310,7 +314,7 @@ void ofxOpenNITracker::updateUserPixels(ofxOpenNIUser & user){
 	}															//	userPix actually contains an array where each value
 																//  corresponds to the user being tracked.
 																//  Ie.,	if userPix[i] == 0 then it's not being tracked -> it's the background!
-																//			if userPix[i] > 0 then the pixel belongs to the user who's value IS userPix[i]
+																//			if userPix[i] > 0  then the pixel belongs to the user who's value IS userPix[i]
 																//  // (many thanks to ascorbin who's code made this apparent to me)
 
 	user.maskPixels.allocate(width,height,OF_IMAGE_GRAYSCALE);
@@ -328,30 +332,19 @@ void ofxOpenNITracker::updateUserPixels(ofxOpenNIUser & user){
 //----------------------------------------
 void ofxOpenNITracker::draw(){
 	ofPushStyle();
-	// show green/red circle if any one is found
-	if (tracked_users_index.size() > 0) {
-
-		// draw all the users
-		for(int i = 0;  i < (int)tracked_users_index.size(); ++i) {
-			drawUser(i);
-		}
-
-	}
+  // draw all the users
+	map<XnUserID, ofxOpenNIUser>::iterator it;
+	for(it=users.begin();it!=users.end();it++){
+    it->second.draw();
+  }
 	ofPopStyle();
 }
-
-//----------------------------------------
-void ofxOpenNITracker::drawUser(int nUserNum) {
-	if(nUserNum - 1 > (int)tracked_users_index.size())
-		return;
-	tracked_users[tracked_users_index[nUserNum]].debugDraw();
-}
-
 
 //----------------------------------------
 void ofxOpenNITracker::startPoseDetection(XnUserID nID) {
 	ofLogVerbose(LOG_NAME) << "Start pose detection for user" << nID;
 	user_generator.GetPoseDetectionCap().StartPoseDetection(calibration_pose, nID);
+  setUserState(nID, ofxOpenNIUser::NeedsPose);
 }
 
 
@@ -365,16 +358,20 @@ void ofxOpenNITracker::stopPoseDetection(XnUserID nID) {
 void ofxOpenNITracker::requestCalibration(XnUserID nID) {
 	ofLogVerbose(LOG_NAME) << "Calibration requested for user" << nID;
 	user_generator.GetSkeletonCap().RequestCalibration(nID, TRUE);
+  setUserState(nID, ofxOpenNIUser::Calibrating);
 }
 
 //----------------------------------------
 void ofxOpenNITracker::startTracking(XnUserID nID) {
+	ofLogVerbose(LOG_NAME) << "Start tracking user" << nID;
 	user_generator.GetSkeletonCap().StartTracking(nID);
+  setUserState(nID, ofxOpenNIUser::Tracking);
 }
 
 //----------------------------------------
 bool ofxOpenNITracker::needsPoseForCalibration() {
-	return needs_pose;
+  return false;
+//	return needs_pose;
 }
 
 //----------------------------------------
@@ -383,13 +380,37 @@ xn::UserGenerator&	ofxOpenNITracker::getXnUserGenerator(){
 }
 
 //----------------------------------------
-int	ofxOpenNITracker::getNumberOfTrackedUsers(){
-	return tracked_users_index.size();
+unsigned int ofxOpenNITracker::getNumberOfUsers(unsigned int stateMask){
+  unsigned int nUsers = 0;
+	map<XnUserID, ofxOpenNIUser>::iterator it;
+	for(it=users.begin();it!=users.end();it++){
+    if (it->second.state & stateMask)
+      nUsers++;
+  }
+	return nUsers;
 }
 
 //----------------------------------------
-ofxOpenNIUser&	ofxOpenNITracker::getTrackedUser(int nUserNum){
-	return tracked_users[tracked_users_index[nUserNum]];
+ofxOpenNIUser* ofxOpenNITracker::getUserByIndex(int nUserNum, unsigned int stateMask){
+  unsigned int nUser;
+  map<XnUserID, ofxOpenNIUser>::iterator it;
+	for(it=users.begin();it!=users.end();it++){
+    if (it->second.state & stateMask)
+      nUser++;
+    if (nUser==nUserNum)
+      return &it->second;
+  }
+
+	return NULL;
+}
+
+//----------------------------------------
+ofxOpenNIUser* ofxOpenNITracker::getUserByID(int nID, unsigned int stateMask){
+  if (users.find(nID) != users.end())
+    if (users[nID].state & stateMask)
+      return (&users[nID]);
+
+  return NULL;
 }
 
 //----------------------------------------
@@ -400,4 +421,49 @@ float ofxOpenNITracker::getWidth(){
 //----------------------------------------
 float ofxOpenNITracker::getHeight(){
 	return height;
+}
+
+//----------------------------------------
+bool ofxOpenNITracker::saveCalibrationData(unsigned int nID, bool overwrite){
+  if (!overwrite && ofFile::doesFileExist("openni/calibration.bin"))
+    return false;
+
+  if (user_generator.GetSkeletonCap().IsCalibrated(nID)){
+//    std::string userFilePath = ofToDataPath("user_"+ofToString(nID)+".bin");
+    std::string userFilePath = ofToDataPath("openni/calibration.bin");
+    XnStatus nRetVal = user_generator.GetSkeletonCap().SaveCalibrationDataToFile(nID, userFilePath.c_str());
+    if (nRetVal != XN_STATUS_OK)
+      std::cout << "Save calibration to file failed: " << xnGetStatusString(nRetVal) << std::endl;
+    else
+      std::cout << "Saved calibration to file" << std::endl;
+
+    return (nRetVal != XN_STATUS_OK);
+  }
+  return false;
+}
+
+//----------------------------------------
+bool ofxOpenNITracker::loadCalibrationData(unsigned int nID){
+  if (ofFile::doesFileExist("openni/calibration.bin")) {
+    std::cout << "Loaded calibration from file" << std::endl;
+    user_generator.GetSkeletonCap().LoadCalibrationDataFromFile(nID, ofToDataPath("openni/calibration.bin").c_str());
+    return true;
+  }
+  return false;
+}
+
+//----------------------------------------
+ofxOpenNIUser::TrackingState ofxOpenNITracker::getUserState(unsigned int nID)
+{
+  if (users.find(nID) != users.end())
+    return users[nID].state;
+
+  return ofxOpenNIUser::Invalid;
+}
+
+//----------------------------------------
+void ofxOpenNITracker::setUserState(unsigned int nID, ofxOpenNIUser::TrackingState userState)
+{
+  if (users.find(nID) != users.end())
+    users[nID].state = userState;
 }

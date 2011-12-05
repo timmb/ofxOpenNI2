@@ -19,25 +19,29 @@ public:
 	void update();
 	void draw();
 
-	void drawUser(int nUserNum);
-
 	void setUseMaskPixels(bool b);
 	void setUsePointClouds(bool b);
 
 	void setSmoothing(float smooth);
 	float getSmoothing();
 
-	int	getNumberOfTrackedUsers();
-	ofxOpenNIUser&	getTrackedUser(int nUserNum);
+	unsigned int getNumberOfUsers(unsigned int stateMask=-1);
+	ofxOpenNIUser* getUserByIndex(int nUserNum, unsigned int stateMask=-1);
+	ofxOpenNIUser* getUserByID(int nID, unsigned int stateMask=-1);
+
+  bool saveCalibrationData(unsigned int nID, bool overwrite=true);
+  bool loadCalibrationData(unsigned int nID);  
 
 	float getWidth();
 	float getHeight();
 
-
-	xn::UserGenerator&	getXnUserGenerator();
+	xn::UserGenerator& getXnUserGenerator();
 
 	static string LOG_NAME;
 private:
+  ofxOpenNIUser::TrackingState getUserState(unsigned int nID);
+  void setUserState(unsigned int nID, ofxOpenNIUser::TrackingState userState);
+
 	void updatePointClouds(ofxOpenNIUser & user);
 	void updateUserPixels(ofxOpenNIUser & user);
 
@@ -46,7 +50,6 @@ private:
 	void stopPoseDetection(XnUserID nID);
 	void requestCalibration(XnUserID nID);
 	void startTracking(XnUserID nID);
-
 
 	static void XN_CALLBACK_TYPE User_NewUser(xn::UserGenerator& rGenerator, XnUserID nID, void* pCookie);
 	static void XN_CALLBACK_TYPE User_LostUser(xn::UserGenerator& rGenerator, XnUserID nID, void* pCookie);
@@ -63,11 +66,10 @@ private:
 
 	bool usePointClouds,useMaskPixels;
 
-	set<XnUserID> prev_tracked_users;
-	map<XnUserID,ofxOpenNIUser> tracked_users;
-	vector<XnUserID> tracked_users_index;
+	map<XnUserID,ofxOpenNIUser> users;
 
 	int width, height;
 
 	float smoothing_factor;
 };
+

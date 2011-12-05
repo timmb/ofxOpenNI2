@@ -74,8 +74,6 @@ ofxOpenNI::ofxOpenNI(){
 
 	g_pPrimary = NULL;
 
-	depth_coloring = COLORING_RAINBOW;
-
 	useTexture = true;
 	bGeneratePCColors = false;
 	bGeneratePCTexCoords = false;
@@ -126,23 +124,13 @@ void ofxOpenNI::initConstants(){
 //----------------------------------------
 void ofxOpenNI::allocateDepthBuffers(){
 	if(g_bIsDepthOn){
-		max_depth	= g_Depth.GetDeviceMaxDepth();
-		depthPixels[0].allocate(640,480,OF_IMAGE_COLOR_ALPHA);
-		depthPixels[1].allocate(640,480,OF_IMAGE_COLOR_ALPHA);
-		currentDepthPixels = &depthPixels[0];
-		backDepthPixels = &depthPixels[1];
-		if(useTexture) depthTexture.allocate(640,480,GL_RGBA);
-	}
-}
-
-//----------------------------------------
-void ofxOpenNI::allocateDepthRawBuffers(){
-	if(g_bIsDepthRawOnOption){
-		depthRawPixels[0].allocate(640,480,OF_PIXELS_MONO);
-		depthRawPixels[1].allocate(640,480,OF_PIXELS_MONO);
-		currentDepthRawPixels = &depthRawPixels[0];
-		backDepthRawPixels = &depthRawPixels[1];
-	}
+    max_depth       = g_Depth.GetDeviceMaxDepth();
+    depthPixels[0].allocate(640,480,OF_PIXELS_MONO);
+    depthPixels[1].allocate(640,480,OF_PIXELS_MONO);
+    currentDepthPixels = &depthPixels[0];
+    backDepthPixels = &depthPixels[1];
+    if(useTexture) depthTexture.allocate(640,480,GL_LUMINANCE16);
+  }
 }
 
 //----------------------------------------
@@ -153,6 +141,17 @@ void ofxOpenNI::allocateRGBBuffers(){
 		currentRGBPixels = &rgbPixels[0];
 		backRGBPixels = &rgbPixels[1];
 		if(useTexture) rgbTexture.allocate(640,480,GL_RGB);
+	}
+}
+
+//----------------------------------------
+void ofxOpenNI::allocateIRBuffers(){
+	if(g_bIsIROn){
+		irPixels[0].allocate(640,480,OF_IMAGE_GRAYSCALE);
+		irPixels[1].allocate(640,480,OF_IMAGE_GRAYSCALE);
+		currentIRPixels = &irPixels[0];
+		backIRPixels = &irPixels[1];
+		if(useTexture) irTexture.allocate(640,480,GL_LUMINANCE8);
 	}
 }
 
@@ -177,8 +176,6 @@ void ofxOpenNI::openCommon(){
 	g_bIsAudioOn = false;
 	g_bIsPlayerOn = false;
 	
-	g_bIsDepthRawOnOption = false;
-
 	NodeInfoList list;
 	nRetVal = g_Context.EnumerateExistingNodes(list);
 	if (nRetVal == XN_STATUS_OK)
@@ -194,7 +191,6 @@ void ofxOpenNI::openCommon(){
 			case XN_NODE_TYPE_DEPTH:
 				ofLogVerbose(LOG_NAME) << "Creating depth generator";
 				g_bIsDepthOn = true;
-				g_bIsDepthRawOnOption = true;
 				(*it).GetInstance(g_Depth);
 				break;
 			case XN_NODE_TYPE_IMAGE:
@@ -226,8 +222,8 @@ void ofxOpenNI::openCommon(){
 
 	initConstants();
 	allocateDepthBuffers();
-	allocateDepthRawBuffers();
 	allocateRGBBuffers();
+	allocateIRBuffers();
 
 
 	pointCloud.setMode(OF_PRIMITIVE_POINTS);
@@ -312,11 +308,6 @@ bool ofxOpenNI::setupFromRecording(string recording, bool _threaded){
 }
 
 //----------------------------------------
-void ofxOpenNI::setDepthColoring(DepthColoring coloring){
-	depth_coloring = coloring;
-}
-
-//----------------------------------------
 void ofxOpenNI::readFrame(){
 	XnStatus rc = XN_STATUS_OK;
 
@@ -353,17 +344,22 @@ void ofxOpenNI::readFrame(){
 	if(g_bIsImageOn){
 		generateImagePixels();
 	}
-	
+
+  if(g_bIsIROn){
+		generateIRPixels();
+	}
+
 	if(threaded) lock();
 	if(g_bIsDepthOn){
-		swap(backDepthPixels,currentDepthPixels);
-		if (g_bIsDepthRawOnOption) {
-			swap(backDepthRawPixels,currentDepthRawPixels);
-		}
+    swap(backDepthPixels,currentDepthPixels);
 	}
 	if(g_bIsImageOn){
 		swap(backRGBPixels,currentRGBPixels);
 	}
+	if(g_bIsIROn){
+		swap(backIRPixels,currentIRPixels);
+	}
+
 	bNewPixels = true;
 	if(threaded) unlock();
 }
@@ -390,10 +386,22 @@ void ofxOpenNI::update(){
 
 	if(bNewPixels){
 		if(g_bIsDepthOn && useTexture){
-			depthTexture.loadData(*currentDepthPixels);
+      // TODO: shader for this
+      float scale = 1<<(16-11);
+      glPushAttrib(GL_PIXEL_MODE_BIT);
+      {
+        glPixelTransferf(GL_RED_SCALE, scale);
+        glPixelTransferf(GL_GREEN_SCALE, scale);
+        glPixelTransferf(GL_BLUE_SCALE, scale);
+        depthTexture.loadData(*currentDepthPixels);
+      }
+      glPopAttrib();
 		}
 		if(g_bIsImageOn && useTexture){
 			rgbTexture.loadData(*currentRGBPixels);
+		}
+		if(g_bIsIROn && useTexture){
+			irTexture.loadData(*currentIRPixels);
 		}
 		bNewPixels = false;
 		bNewFrame = true;
@@ -477,6 +485,17 @@ void ofxOpenNI::generateImagePixels(){
 }
 
 //----------------------------------------
+void ofxOpenNI::generateIRPixels(){
+	xn::IRMetaData imd;
+	g_IR.GetMetaData(imd);
+	const XnIRPixel* pImage = imd.Data();
+
+  for (unsigned int y=0; y<imd.YRes(); ++y)
+    for (unsigned int x=0; x<imd.XRes(); ++x)
+      backIRPixels->setColor(x, y, pImage[y*imd.XRes()+x]);
+}
+
+//----------------------------------------
 void ofxOpenNI::draw(int x, int y){
 	depthTexture.draw(x,y);
 }
@@ -484,6 +503,11 @@ void ofxOpenNI::draw(int x, int y){
 //----------------------------------------
 void ofxOpenNI::drawRGB(int x, int y){
 	rgbTexture.draw(x,y);
+}
+
+//----------------------------------------
+void ofxOpenNI::drawIR(int x, int y){
+	irTexture.draw(x,y);
 }
 
 //----------------------------------------
@@ -496,147 +520,7 @@ void ofxOpenNI::generateDepthPixels(){
 	if (g_DepthMD.FrameID() == 0) return;
 
 	// copy raw values
-	if (g_bIsDepthRawOnOption)
-		backDepthRawPixels->setFromPixels(depth, 640, 480, 1);
-	
-	// copy depth into texture-map
-	float max;
-	for (XnUInt16 y = g_DepthMD.YOffset(); y < g_DepthMD.YRes() + g_DepthMD.YOffset(); y++) {
-		unsigned char * texture = backDepthPixels->getPixels() + y * g_DepthMD.XRes() * 4 + g_DepthMD.XOffset() * 4;
-		for (XnUInt16 x = 0; x < g_DepthMD.XRes(); x++, depth++, texture += 4) {
-			XnUInt8 red = 0;
-			XnUInt8 green = 0;
-			XnUInt8 blue = 0;
-			XnUInt8 alpha = 255;
-
-			XnUInt16 col_index;
-
-			switch (depth_coloring){
-				case COLORING_PSYCHEDELIC_SHADES:
-					alpha *= (((XnFloat)(*depth % 10) / 20) + 0.5);
-				case COLORING_PSYCHEDELIC:
-					switch ((*depth/10) % 10){
-						case 0:
-							red = 255;
-							break;
-						case 1:
-							green = 255;
-							break;
-						case 2:
-							blue = 255;
-							break;
-						case 3:
-							red = 255;
-							green = 255;
-							break;
-						case 4:
-							green = 255;
-							blue = 255;
-							break;
-						case 5:
-							red = 255;
-							blue = 255;
-							break;
-						case 6:
-							red = 255;
-							green = 255;
-							blue = 255;
-							break;
-						case 7:
-							red = 127;
-							blue = 255;
-							break;
-						case 8:
-							red = 255;
-							blue = 127;
-							break;
-						case 9:
-							red = 127;
-							green = 255;
-							break;
-					}
-					break;
-				case COLORING_RAINBOW:
-					col_index = (XnUInt16)(((*depth) / (max_depth / 256)));
-					red = PalletIntsR[col_index];
-					green = PalletIntsG[col_index];
-					blue = PalletIntsB[col_index];
-					break;
-				case COLORING_CYCLIC_RAINBOW:
-					col_index = (*depth % 256);
-					red = PalletIntsR[col_index];
-					green = PalletIntsG[col_index];
-					blue = PalletIntsB[col_index];
-					break;
-				case COLORING_BLUES:
-					// 3 bytes of depth: black (R0G0B0) >> blue (001) >> cyan (011) >> white (111)
-					max = 256+255+255;
-					col_index = (XnUInt16)(((*depth) / ( max_depth / max)));
-					if ( col_index < 256 )
-					{
-						blue	= col_index;
-						green	= 0;
-						red		= 0;
-					}
-					else if ( col_index < (256+255) )
-					{
-						blue	= 255;
-						green	= (col_index % 256) + 1;
-						red		= 0;
-					}
-					else if ( col_index < (256+255+255) )
-					{
-						blue	= 255;
-						green	= 255;
-						red		= (col_index % 256) + 1;
-					}
-					else
-					{
-						blue	= 255;
-						green	= 255;
-						red		= 255;
-					}
-					break;
-				case COLORING_GREY:
-					max = 255;	// half depth
-					{
-						XnUInt8 a = (XnUInt8)(((*depth) / ( max_depth / max)));
-						red		= a;
-						green	= a;
-						blue	= a;
-					}
-					break;
-				case COLORING_STATUS:
-					// This is something to use on installations
-					// when the end user needs to know if the camera is tracking or not
-					// The scene will be painted GREEN if status == true
-					// The scene will be painted RED if status == false
-					// Usage: declare a global bool status and that's it!
-					// I'll keep it commented so you dont have to have a status on every project
-#if 0
-					{
-						extern bool status;
-						max = 255;	// half depth
-						XnUInt8 a = 255 - (XnUInt8)(((*depth) / ( max_depth / max)));
-						red		= ( status ? 0 : a);
-						green	= ( status ? a : 0);
-						blue	= 0;
-					}
-#endif
-					break;
-			}
-
-			texture[0] = red;
-			texture[1] = green;
-			texture[2] = blue;
-
-			if (*depth == 0)
-				texture[3] = 0;
-			else
-				texture[3] = alpha;
-		}
-	}
-
+  backDepthPixels->setFromPixels(depth, 640, 480, 1);	
 }
 
 //----------------------------------------
@@ -695,26 +579,22 @@ xn::AudioMetaData & ofxOpenNI::getAudioMetaData(){
 }
 
 //----------------------------------------
-ofPixels & ofxOpenNI::getDepthPixels(){
-	Poco::ScopedLock<ofMutex> lock(mutex);
+ofShortPixels & ofxOpenNI::getDepthPixels(){
+	Poco::ScopedLock<ofMutex> lock(mutex);	
 	return *currentDepthPixels;
-}
-
-//----------------------------------------
-ofShortPixels & ofxOpenNI::getDepthRawPixels(){
-	Poco::ScopedLock<ofMutex> lock(mutex);
-	
-	if (!g_bIsDepthRawOnOption) {
-		ofLogWarning(LOG_NAME) << "g_bIsDepthRawOnOption was disabled, enabling raw pixels";
-		g_bIsDepthRawOnOption = true;
-	}
-	return *currentDepthRawPixels;
 }
 
 //----------------------------------------
 ofPixels & ofxOpenNI::getRGBPixels(){
 	Poco::ScopedLock<ofMutex> lock(mutex);
 	return *currentRGBPixels;
+}
+
+//----------------------------------------
+//ofShortPixels & ofxOpenNI::getIRPixels(){
+ofPixels & ofxOpenNI::getIRPixels(){
+	Poco::ScopedLock<ofMutex> lock(mutex);
+	return *currentIRPixels;
 }
 
 //----------------------------------------
@@ -725,6 +605,11 @@ ofTexture & ofxOpenNI::getDepthTextureReference(){
 //----------------------------------------
 ofTexture & ofxOpenNI::getRGBTextureReference(){
 	return rgbTexture;
+}
+
+//----------------------------------------
+ofTexture & ofxOpenNI::getIRTextureReference(){
+	return irTexture;
 }
 
 //----------------------------------------
@@ -847,16 +732,11 @@ void ofxOpenNI::cameraToWorld(const vector<ofVec2f>& c, vector<ofVec3f>& w){
 	const int nPoints = c.size();
 	w.resize(nPoints);
 	
-	if (!g_bIsDepthRawOnOption) {
-		ofLogError(LOG_NAME) << "ofxOpenNI::cameraToWorld - cannot perform this function if g_bIsDepthRawOnOption is false. You can enabled g_bIsDepthRawOnOption by calling getDepthRawPixels(..).";
-		return;
-	}
-	
 	vector<XnPoint3D> projective(nPoints);
 	XnPoint3D *out = &projective[0];
 	
 	if(threaded) lock();
-	const XnDepthPixel* d = currentDepthRawPixels->getPixels();
+	const XnDepthPixel* d = currentDepthPixels->getPixels();
 	unsigned int pixel;
 	for (int i=0; i<nPoints; ++i) {
 		pixel  = (int)c[i].x + (int)c[i].y * 640;
