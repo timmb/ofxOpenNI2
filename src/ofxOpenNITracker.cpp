@@ -121,11 +121,12 @@ bool ofxOpenNITracker::setup(ofxOpenNI & _openNI){
 	}*/
 
 	// if one doesn't exist then create user generator.
-	result = user_generator.Create(openNI->getXnContext());
-	SHOW_RC(result, "Create user generator");
+//	result = user_generator.Create(openNI->getXnContext());
+//	SHOW_RC(result, "Create user generator");
 
 	if (result != XN_STATUS_OK) return false;
 
+  xn::UserGenerator& user_generator = openNI->getUserGenerator();
 	// register user callbacks
 	XnCallbackHandle user_cb_handle;
 	user_generator.RegisterUserCallbacks(
@@ -196,8 +197,8 @@ void ofxOpenNITracker::setUsePointClouds(bool b){
 void ofxOpenNITracker::setSmoothing(float smooth){
 	if (smooth > 0.0f && smooth < 1.0f) {
 		smoothing_factor = smooth;
-		if (user_generator.IsValid()) {
-			user_generator.GetSkeletonCap().SetSmoothing(smooth);
+		if (openNI->getUserGenerator().IsValid()) {
+			openNI->getUserGenerator().GetSkeletonCap().SetSmoothing(smooth);
 		}
 	}
 }
@@ -211,6 +212,7 @@ float ofxOpenNITracker::getSmoothing(){
 void ofxOpenNITracker::update(){
 	vector<XnUserID> userIds(MAX_NUMBER_USERS);
   XnUInt16 nUsers = userIds.size();
+  xn::UserGenerator& user_generator = openNI->getUserGenerator();
 	user_generator.GetUsers(&userIds[0], nUsers);
   userIds.resize(nUsers);
 
@@ -255,12 +257,10 @@ void ofxOpenNITracker::update(){
 
 	map<XnUserID, ofxOpenNIUser>::iterator it;
 	for(it=users.begin();it!=users.end();it++){
-		if(std::find(userIds.begin(), userIds.end(), it->first)!=userIds.end()){
+		if(std::find(userIds.begin(), userIds.end(), it->first)==userIds.end()){
 			users.erase(it);
 		}
 	}
-
-	//if (useMaskPixels) updateUserPixels();
 }
 
 //----------------------------------------
@@ -278,7 +278,7 @@ void ofxOpenNITracker::updatePointClouds(ofxOpenNIUser & user) {
 	xn::SceneMetaData smd;
 	unsigned short *userPix;
 
-	if (user_generator.GetUserPixels(user.id, smd) == XN_STATUS_OK) {
+	if (openNI->getUserGenerator().GetUserPixels(user.id, smd) == XN_STATUS_OK) {
 		userPix = (unsigned short*)smd.Data();
 	}
 
@@ -309,7 +309,7 @@ void ofxOpenNITracker::updateUserPixels(ofxOpenNIUser & user){
 	xn::SceneMetaData smd;
 	unsigned short *userPix;
 
-	if (user_generator.GetUserPixels(user.id, smd) == XN_STATUS_OK) { //	GetUserPixels is supposed to take a user ID number,
+	if (openNI->getUserGenerator().GetUserPixels(user.id, smd) == XN_STATUS_OK) { //	GetUserPixels is supposed to take a user ID number,
 		userPix = (unsigned short*)smd.Data();					//  but you get the same data no matter what you pass.
 	}															//	userPix actually contains an array where each value
 																//  corresponds to the user being tracked.
@@ -325,7 +325,6 @@ void ofxOpenNITracker::updateUserPixels(ofxOpenNIUser & user){
 		} else {
 			user.maskPixels[i] = 0;
 		}
-
 	}
 }
 
@@ -343,28 +342,28 @@ void ofxOpenNITracker::draw(){
 //----------------------------------------
 void ofxOpenNITracker::startPoseDetection(XnUserID nID) {
 	ofLogVerbose(LOG_NAME) << "Start pose detection for user" << nID;
-	user_generator.GetPoseDetectionCap().StartPoseDetection(calibration_pose, nID);
+	openNI->getUserGenerator().GetPoseDetectionCap().StartPoseDetection(calibration_pose, nID);
   setUserState(nID, ofxOpenNIUser::NeedsPose);
 }
 
 
 //----------------------------------------
 void ofxOpenNITracker::stopPoseDetection(XnUserID nID) {
-	user_generator.GetPoseDetectionCap().StopPoseDetection(nID);
+	openNI->getUserGenerator().GetPoseDetectionCap().StopPoseDetection(nID);
 }
 
 
 //----------------------------------------
 void ofxOpenNITracker::requestCalibration(XnUserID nID) {
 	ofLogVerbose(LOG_NAME) << "Calibration requested for user" << nID;
-	user_generator.GetSkeletonCap().RequestCalibration(nID, TRUE);
+	openNI->getUserGenerator().GetSkeletonCap().RequestCalibration(nID, TRUE);
   setUserState(nID, ofxOpenNIUser::Calibrating);
 }
 
 //----------------------------------------
 void ofxOpenNITracker::startTracking(XnUserID nID) {
 	ofLogVerbose(LOG_NAME) << "Start tracking user" << nID;
-	user_generator.GetSkeletonCap().StartTracking(nID);
+	openNI->getUserGenerator().GetSkeletonCap().StartTracking(nID);
   setUserState(nID, ofxOpenNIUser::Tracking);
 }
 
@@ -372,11 +371,6 @@ void ofxOpenNITracker::startTracking(XnUserID nID) {
 bool ofxOpenNITracker::needsPoseForCalibration() {
   return false;
 //	return needs_pose;
-}
-
-//----------------------------------------
-xn::UserGenerator&	ofxOpenNITracker::getXnUserGenerator(){
-	return user_generator;
 }
 
 //----------------------------------------
@@ -392,12 +386,12 @@ unsigned int ofxOpenNITracker::getNumberOfUsers(unsigned int stateMask){
 
 //----------------------------------------
 ofxOpenNIUser* ofxOpenNITracker::getUserByIndex(int nUserNum, unsigned int stateMask){
-  unsigned int nUser;
+  unsigned int nValidUsers=0;
   map<XnUserID, ofxOpenNIUser>::iterator it;
 	for(it=users.begin();it!=users.end();it++){
     if (it->second.state & stateMask)
-      nUser++;
-    if (nUser==nUserNum)
+      nValidUsers++;
+    if ((nValidUsers-1)==nUserNum)
       return &it->second;
   }
 
@@ -428,10 +422,10 @@ bool ofxOpenNITracker::saveCalibrationData(unsigned int nID, bool overwrite){
   if (!overwrite && ofFile::doesFileExist("openni/calibration.bin"))
     return false;
 
-  if (user_generator.GetSkeletonCap().IsCalibrated(nID)){
+  if (openNI->getUserGenerator().GetSkeletonCap().IsCalibrated(nID)){
 //    std::string userFilePath = ofToDataPath("user_"+ofToString(nID)+".bin");
     std::string userFilePath = ofToDataPath("openni/calibration.bin");
-    XnStatus nRetVal = user_generator.GetSkeletonCap().SaveCalibrationDataToFile(nID, userFilePath.c_str());
+    XnStatus nRetVal = openNI->getUserGenerator().GetSkeletonCap().SaveCalibrationDataToFile(nID, userFilePath.c_str());
     if (nRetVal != XN_STATUS_OK)
       std::cout << "Save calibration to file failed: " << xnGetStatusString(nRetVal) << std::endl;
     else
@@ -446,7 +440,7 @@ bool ofxOpenNITracker::saveCalibrationData(unsigned int nID, bool overwrite){
 bool ofxOpenNITracker::loadCalibrationData(unsigned int nID){
   if (ofFile::doesFileExist("openni/calibration.bin")) {
     std::cout << "Loaded calibration from file" << std::endl;
-    user_generator.GetSkeletonCap().LoadCalibrationDataFromFile(nID, ofToDataPath("openni/calibration.bin").c_str());
+    openNI->getUserGenerator().GetSkeletonCap().LoadCalibrationDataFromFile(nID, ofToDataPath("openni/calibration.bin").c_str());
     return true;
   }
   return false;
@@ -465,5 +459,8 @@ ofxOpenNIUser::TrackingState ofxOpenNITracker::getUserState(unsigned int nID)
 void ofxOpenNITracker::setUserState(unsigned int nID, ofxOpenNIUser::TrackingState userState)
 {
   if (users.find(nID) != users.end())
+  {
     users[nID].state = userState;
+    users[nID].stateChangedTimestamp = ofGetSystemTime();
+  }
 }

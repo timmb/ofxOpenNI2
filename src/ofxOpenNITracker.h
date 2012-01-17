@@ -35,8 +35,6 @@ public:
 	float getWidth();
 	float getHeight();
 
-	xn::UserGenerator& getXnUserGenerator();
-
 	static string LOG_NAME;
 private:
   ofxOpenNIUser::TrackingState getUserState(unsigned int nID);
@@ -57,9 +55,7 @@ private:
 	static void XN_CALLBACK_TYPE UserCalibration_CalibrationStart(xn::SkeletonCapability& capability, XnUserID nID, void* pCookie);
 	static void XN_CALLBACK_TYPE UserCalibration_CalibrationEnd(xn::SkeletonCapability& rCapability, XnUserID nID, XnCalibrationStatus bSuccess, void* pCookie);
 
-	ofxOpenNI * openNI;
-
-	xn::UserGenerator user_generator;
+	ofxOpenNI* openNI;
 
 	bool needs_pose;
 	XnChar	calibration_pose[20];

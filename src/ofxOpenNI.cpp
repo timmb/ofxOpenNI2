@@ -19,58 +19,21 @@ string ofxOpenNI::LOG_NAME = "ofxOpenNI";
 
 using namespace xn;
 
-static bool rainbowPalletInit = false;
-XnUInt8 PalletIntsR [256] = {0};
-XnUInt8 PalletIntsG [256] = {0};
-XnUInt8 PalletIntsB [256] = {0};
-
-//----------------------------------------
-static void CreateRainbowPallet() {
-	if(rainbowPalletInit) return;
-
-	unsigned char r, g, b;
-	for (int i=1; i<255; i++) {
-		if (i<=29) {
-			r = (unsigned char)(129.36-i*4.36);
-			g = 0;
-			b = (unsigned char)255;
-		}
-		else if (i<=86) {
-			r = 0;
-			g = (unsigned char)(-133.54+i*4.52);
-			b = (unsigned char)255;
-		}
-		else if (i<=141) {
-			r = 0;
-			g = (unsigned char)255;
-			b = (unsigned char)(665.83-i*4.72);
-		}
-		else if (i<=199) {
-			r = (unsigned char)(-635.26+i*4.47);
-			g = (unsigned char)255;
-			b = 0;
-		}
-		else {
-			r = (unsigned char)255;
-			g = (unsigned char)(1166.81-i*4.57);
-			b = 0;
-		}
-		PalletIntsR[i] = r;
-		PalletIntsG[i] = g;
-		PalletIntsB[i] = b;
-	}
-	rainbowPalletInit = true;
-}
-
 //----------------------------------------
 ofxOpenNI::ofxOpenNI(){
-	CreateRainbowPallet();
+	g_bUseDepth = true;
+	g_bUseImage = true;
+	g_bUseIR = true;
+  g_bUseUser = true;
+	g_bUseAudio = true;
+	g_bUsePlayer = true;
 
-	g_bIsDepthOn = false;
-	g_bIsImageOn = false;
-	g_bIsIROn = false;
-	g_bIsAudioOn = false;
-	g_bIsPlayerOn = false;
+  g_bHasDepth = false;
+	g_bHasImage = false;
+	g_bHasIR = false;
+  g_bHasUser = false;
+	g_bHasAudio = false;
+	g_bHasPlayer = false;
 
 	g_pPrimary = NULL;
 
@@ -123,36 +86,47 @@ void ofxOpenNI::initConstants(){
 
 //----------------------------------------
 void ofxOpenNI::allocateDepthBuffers(){
-	if(g_bIsDepthOn){
+	if(g_bHasDepth && g_bUseDepth){
     max_depth       = g_Depth.GetDeviceMaxDepth();
-    depthPixels[0].allocate(640,480,OF_PIXELS_MONO);
-    depthPixels[1].allocate(640,480,OF_PIXELS_MONO);
+    depthPixels[0].allocate(getWidth(),getHeight(),OF_PIXELS_MONO);
+    depthPixels[1].allocate(getWidth(),getHeight(),OF_PIXELS_MONO);
     currentDepthPixels = &depthPixels[0];
     backDepthPixels = &depthPixels[1];
-    if(useTexture) depthTexture.allocate(640,480,GL_LUMINANCE16);
+    if(useTexture) depthTexture.allocate(getWidth(),getHeight(),GL_LUMINANCE16);
   }
 }
 
 //----------------------------------------
 void ofxOpenNI::allocateRGBBuffers(){
-	if(g_bIsImageOn){
-		rgbPixels[0].allocate(640,480,OF_IMAGE_COLOR);
-		rgbPixels[1].allocate(640,480,OF_IMAGE_COLOR);
+	if(g_bHasImage && g_bUseImage){
+		rgbPixels[0].allocate(getWidth(),getHeight(),OF_IMAGE_COLOR);
+		rgbPixels[1].allocate(getWidth(),getHeight(),OF_IMAGE_COLOR);
 		currentRGBPixels = &rgbPixels[0];
 		backRGBPixels = &rgbPixels[1];
-		if(useTexture) rgbTexture.allocate(640,480,GL_RGB);
+		if(useTexture) rgbTexture.allocate(getWidth(),getHeight(),GL_RGB);
 	}
 }
 
 //----------------------------------------
 void ofxOpenNI::allocateIRBuffers(){
-	if(g_bIsIROn){
-		irPixels[0].allocate(640,480,OF_IMAGE_GRAYSCALE);
-		irPixels[1].allocate(640,480,OF_IMAGE_GRAYSCALE);
+	if(g_bHasIR && g_bUseIR){
+		irPixels[0].allocate(getWidth(),getHeight(),OF_IMAGE_GRAYSCALE);
+		irPixels[1].allocate(getWidth(),getHeight(),OF_IMAGE_GRAYSCALE);
 		currentIRPixels = &irPixels[0];
 		backIRPixels = &irPixels[1];
-		if(useTexture) irTexture.allocate(640,480,GL_LUMINANCE8);
+		if(useTexture) irTexture.allocate(getWidth(),getHeight(),GL_LUMINANCE8);
 	}
+}
+
+//----------------------------------------
+void ofxOpenNI::allocateUserMaskBuffers(){
+	if(g_bHasUser && g_bUseUser){
+    userMaskPixels[0].allocate(getWidth(),getHeight(),OF_PIXELS_MONO);
+    userMaskPixels[1].allocate(getWidth(),getHeight(),OF_PIXELS_MONO);
+    currentUserMaskPixels = &userMaskPixels[0];
+    backUserMaskPixels = &userMaskPixels[1];
+    if(useTexture) userMaskTexture.allocate(getWidth(),getHeight(),GL_LUMINANCE16);
+  }
 }
 
 //----------------------------------------
@@ -170,11 +144,12 @@ void XN_CALLBACK_TYPE ofxOpenNI::onErrorStateChanged(XnStatus errorState, void* 
 void ofxOpenNI::openCommon(){
 	XnStatus nRetVal = XN_STATUS_OK;
 
-	g_bIsDepthOn = false;
-	g_bIsImageOn = false;
-	g_bIsIROn = false;
-	g_bIsAudioOn = false;
-	g_bIsPlayerOn = false;
+	g_bHasDepth = false;
+	g_bHasImage = false;
+	g_bHasIR = false;
+  g_bHasUser = false;
+	g_bHasAudio = false;
+	g_bHasPlayer = false;
 	
 	NodeInfoList list;
 	nRetVal = g_Context.EnumerateExistingNodes(list);
@@ -190,27 +165,32 @@ void ofxOpenNI::openCommon(){
 				break;
 			case XN_NODE_TYPE_DEPTH:
 				ofLogVerbose(LOG_NAME) << "Creating depth generator";
-				g_bIsDepthOn = true;
+				g_bHasDepth = true;
 				(*it).GetInstance(g_Depth);
 				break;
 			case XN_NODE_TYPE_IMAGE:
 				ofLogVerbose(LOG_NAME) << "Creating image generator";
-				g_bIsImageOn = true;
+				g_bHasImage = true;
 				(*it).GetInstance(g_Image);
 				break;
 			case XN_NODE_TYPE_IR:
 				ofLogVerbose(LOG_NAME) << "Creating ir generator";
-				g_bIsIROn = true;
+				g_bHasIR = true;
 				(*it).GetInstance(g_IR);
 				break;
-			case XN_NODE_TYPE_AUDIO:
-				ofLogVerbose(LOG_NAME) << "Creating audio generator";
-				g_bIsAudioOn = true;
-				(*it).GetInstance(g_Audio);
-				break;
+      case XN_NODE_TYPE_USER:
+        ofLogVerbose(LOG_NAME) << "Creating user generator";
+        g_bHasUser = true;
+        (*it).GetInstance(g_User);
+        break;
+      case XN_NODE_TYPE_AUDIO:
+        ofLogVerbose(LOG_NAME) << "Creating audio generator";
+        g_bHasAudio = true;
+        (*it).GetInstance(g_Audio);
+        break;
 			case XN_NODE_TYPE_PLAYER:
 				ofLogVerbose(LOG_NAME) << "Creating player";
-				g_bIsPlayerOn = true;
+				g_bHasPlayer = true;
 				(*it).GetInstance(g_Player);
 				break;
 			}
@@ -224,15 +204,15 @@ void ofxOpenNI::openCommon(){
 	allocateDepthBuffers();
 	allocateRGBBuffers();
 	allocateIRBuffers();
-
+	allocateUserMaskBuffers();
 
 	pointCloud.setMode(OF_PRIMITIVE_POINTS);
-	pointCloud.getVertices().resize(640*480);
+	pointCloud.getVertices().resize(getWidth()*getHeight());
 
 	int i=0;
-	for(int y=0;y<480;y++){
-		for(int x=0;x<640;x++){
-			pointCloud.getVertices()[i].set(float(x)/640.f,float(y)/480.f,0);
+	for(int y=0;y<getHeight();y++){
+		for(int x=0;x<getWidth();x++){
+			pointCloud.getVertices()[i].set(float(x)/getWidth(),float(y)/getHeight(),0);
 			i++;
 		}
 	}
@@ -336,28 +316,35 @@ void ofxOpenNI::readFrame(){
 	if (g_Audio.IsValid()){
 		g_Audio.GetMetaData(g_AudioMD);
 	}
-
-	if(g_bIsDepthOn){
+  
+	if(g_bHasDepth && g_bUseDepth){
 		generateDepthPixels();
 	}
 
-	if(g_bIsImageOn){
+	if(g_bHasImage && g_bUseImage){
 		generateImagePixels();
 	}
 
-  if(g_bIsIROn){
+  if(g_bHasIR && g_bUseIR){
 		generateIRPixels();
 	}
 
+  if(g_bHasUser && g_bUseUser){
+		generateUserMaskPixels();
+	}
+
 	if(threaded) lock();
-	if(g_bIsDepthOn){
+	if(g_bHasDepth && g_bUseDepth){
     swap(backDepthPixels,currentDepthPixels);
 	}
-	if(g_bIsImageOn){
+	if(g_bHasImage && g_bUseImage){
 		swap(backRGBPixels,currentRGBPixels);
 	}
-	if(g_bIsIROn){
+	if(g_bHasIR && g_bUseIR){
 		swap(backIRPixels,currentIRPixels);
+	}
+	if(g_bHasUser && g_bUseUser){
+		swap(backUserMaskPixels,currentUserMaskPixels);
 	}
 
 	bNewPixels = true;
@@ -385,23 +372,17 @@ void ofxOpenNI::update(){
 	}
 
 	if(bNewPixels){
-		if(g_bIsDepthOn && useTexture){
-      // TODO: shader for this
-      float scale = 1<<(16-11);
-      glPushAttrib(GL_PIXEL_MODE_BIT);
-      {
-        glPixelTransferf(GL_RED_SCALE, scale);
-        glPixelTransferf(GL_GREEN_SCALE, scale);
-        glPixelTransferf(GL_BLUE_SCALE, scale);
-        depthTexture.loadData(*currentDepthPixels);
-      }
-      glPopAttrib();
+		if(g_bHasDepth && g_bUseDepth && useTexture){
+      depthTexture.loadData(*currentDepthPixels);
 		}
-		if(g_bIsImageOn && useTexture){
+		if(g_bHasImage && g_bUseImage && useTexture){
 			rgbTexture.loadData(*currentRGBPixels);
 		}
-		if(g_bIsIROn && useTexture){
+		if(g_bHasIR && g_bUseIR && useTexture){
 			irTexture.loadData(*currentIRPixels);
+		}
+		if(g_bHasUser && g_bUseUser && useTexture){
+			userMaskTexture.loadData(*currentUserMaskPixels);
 		}
 		bNewPixels = false;
 		bNewFrame = true;
@@ -476,6 +457,19 @@ bool ofxOpenNI::disableCalibratedRGBDepth(){
 }
 
 //----------------------------------------
+void ofxOpenNI::generateDepthPixels(){
+  
+	// get the pixels
+	const XnDepthPixel* depth = g_DepthMD.Data();
+	XN_ASSERT(depth);
+  
+	if (g_DepthMD.FrameID() == 0) return;
+  
+	// copy raw values
+  backDepthPixels->setFromPixels(depth, getWidth(), getHeight(), OF_IMAGE_GRAYSCALE);	
+}
+
+//----------------------------------------
 void ofxOpenNI::generateImagePixels(){
 	xn::ImageMetaData imd;
 	g_Image.GetMetaData(imd);
@@ -496,6 +490,16 @@ void ofxOpenNI::generateIRPixels(){
 }
 
 //----------------------------------------
+void ofxOpenNI::generateUserMaskPixels(){
+  xn::SceneMetaData smd;
+  if (g_User.GetUserPixels(0, smd) == XN_STATUS_OK) {
+    const XnUInt16* pImage = smd.Data();
+
+    backUserMaskPixels->setFromPixels(pImage, smd.XRes(),smd.YRes(),OF_IMAGE_GRAYSCALE);
+  }
+}
+
+//----------------------------------------
 void ofxOpenNI::draw(int x, int y){
 	depthTexture.draw(x,y);
 }
@@ -511,16 +515,8 @@ void ofxOpenNI::drawIR(int x, int y){
 }
 
 //----------------------------------------
-void ofxOpenNI::generateDepthPixels(){
-
-	// get the pixels
-	const XnDepthPixel* depth = g_DepthMD.Data();
-	XN_ASSERT(depth);
-
-	if (g_DepthMD.FrameID() == 0) return;
-
-	// copy raw values
-  backDepthPixels->setFromPixels(depth, 640, 480, 1);	
+void ofxOpenNI::drawUserMask(int x, int y){
+	userMaskTexture.draw(x,y);
 }
 
 //----------------------------------------
@@ -546,6 +542,11 @@ xn::ImageGenerator & ofxOpenNI::getImageGenerator(){
 //----------------------------------------
 xn::IRGenerator & ofxOpenNI::getIRGenerator(){
 	return g_IR;
+}
+
+//----------------------------------------
+xn::UserGenerator & ofxOpenNI::getUserGenerator(){
+	return g_User;
 }
 
 //----------------------------------------
@@ -598,6 +599,12 @@ ofPixels & ofxOpenNI::getIRPixels(){
 }
 
 //----------------------------------------
+ofShortPixels & ofxOpenNI::getUserMaskPixels(){
+	Poco::ScopedLock<ofMutex> lock(mutex);
+	return *currentUserMaskPixels;
+}
+
+//----------------------------------------
 ofTexture & ofxOpenNI::getDepthTextureReference(){
 	return depthTexture;
 }
@@ -613,10 +620,15 @@ ofTexture & ofxOpenNI::getIRTextureReference(){
 }
 
 //----------------------------------------
+ofTexture & ofxOpenNI::getUserMaskTextureReference(){
+	return userMaskTexture;
+}
+
+//----------------------------------------
 void ofxOpenNI::setGeneratePCColors(bool generateColors){
 	bGeneratePCColors = generateColors;
 	if(bGeneratePCColors){
-		pointCloud.getColors().resize(640*480);
+		pointCloud.getColors().resize(getWidth()*getHeight());
 	}else{
 		pointCloud.getColors().clear();
 	}
@@ -626,10 +638,10 @@ void ofxOpenNI::setGeneratePCColors(bool generateColors){
 void ofxOpenNI::setGeneratePCTexCoords(bool generateTexCoords){
 	bGeneratePCTexCoords = generateTexCoords;
 	if(bGeneratePCTexCoords){
-		pointCloud.getTexCoords().resize(640*480);
+		pointCloud.getTexCoords().resize(getWidth()*getHeight());
 		int i=0;
-		for(int y=0;y<480;y++){
-			for(int x=0;x<640;x++){
+		for(int y=0;y<getHeight();y++){
+			for(int x=0;x<getWidth();x++){
 				pointCloud.getTexCoords()[i].set(x,y);
 				i++;
 			}
@@ -650,7 +662,7 @@ ofMesh & ofxOpenNI::getPointCloud(){
 				pcDepth->z = (*depth)/max_depth;
 			}
 		}
-		if(g_bIsImageOn && bGeneratePCColors){
+		if(g_bHasImage && g_bUseImage && bGeneratePCColors){
 			unsigned char * rgbColorPtr = currentRGBPixels->getPixels();
 			for(int i=0;i<(int)pointCloud.getColors().size();i++){
 				pointCloud.getColors()[i] = ofColor(*rgbColorPtr, *(rgbColorPtr+1), *(rgbColorPtr+2));
@@ -665,30 +677,36 @@ ofMesh & ofxOpenNI::getPointCloud(){
 
 //----------------------------------------
 float ofxOpenNI::getWidth(){
-	if(g_bIsDepthOn){
-		return g_DepthMD.XRes();
-	}else if(g_bIsImageOn){
-		return g_ImageMD.XRes();
-	}else if(g_bIsIROn){
-		return g_irMD.XRes();
+  float width = 0;
+	if(g_bHasDepth){
+		width = g_DepthMD.XRes();
+	}else if(g_bHasImage){
+		width = g_ImageMD.XRes();
+	}else if(g_bHasIR){
+		width = g_irMD.XRes();
 	}else{
 		ofLogWarning(LOG_NAME) << "getWidth() : We haven't yet initialised any generators, so this value returned is returned as 0";
-		return 0;
 	}
+  if (width == 0)
+    width = 640;
+  return width;
 }
 
 //----------------------------------------
 float ofxOpenNI::getHeight(){
-	if(g_bIsDepthOn){
-		return g_DepthMD.YRes();
-	}else if(g_bIsImageOn){
-		return g_ImageMD.YRes();
-	}else if(g_bIsIROn){
-		return g_irMD.YRes();
+  float height = 0;
+	if(g_bHasDepth){
+		height = g_DepthMD.YRes();
+	}else if(g_bHasImage){
+		height = g_ImageMD.YRes();
+	}else if(g_bHasIR){
+		height = g_irMD.YRes();
 	}else{
 		ofLogWarning(LOG_NAME) << "getHeight() : We haven't yet initialised any generators, so this value returned is returned as 0";
-		return 0;
 	}
+  if (height == 0)
+    height = 480;
+  return height;
 }
 
 //----------------------------------------
@@ -739,8 +757,8 @@ void ofxOpenNI::cameraToWorld(const vector<ofVec2f>& c, vector<ofVec3f>& w){
 	const XnDepthPixel* d = currentDepthPixels->getPixels();
 	unsigned int pixel;
 	for (int i=0; i<nPoints; ++i) {
-		pixel  = (int)c[i].x + (int)c[i].y * 640;
-		if (pixel >= 640*480)
+		pixel  = (int)c[i].x + (int)c[i].y * getWidth();
+		if (pixel >= getWidth()*getHeight())
 			continue;
 		
 		projective[i].X = c[i].x;
@@ -750,4 +768,76 @@ void ofxOpenNI::cameraToWorld(const vector<ofVec2f>& c, vector<ofVec3f>& w){
 	if(threaded) unlock();
 	
 	g_Depth.ConvertProjectiveToRealWorld(nPoints, &projective[0], (XnPoint3D*)&w[0]);	
+}
+
+//----------------------------------------
+void ofxOpenNI::useDepth(bool bUseDepth)
+{
+  g_bUseDepth = bUseDepth;
+}
+
+//----------------------------------------
+void ofxOpenNI::useImage(bool bUseImage)
+{  
+  g_bUseImage = bUseImage;
+}
+
+//----------------------------------------
+void ofxOpenNI::useIR(bool bUseIR)
+{  
+  g_bUseIR = bUseIR;
+}
+
+//----------------------------------------
+void ofxOpenNI::useUser(bool bUseUser)
+{  
+  g_bUseUser = bUseUser;
+}
+
+//----------------------------------------
+void ofxOpenNI::useAudio(bool bUseAudio)
+{
+  g_bUseAudio = bUseAudio;
+}
+
+//----------------------------------------
+void ofxOpenNI::usePlayer(bool bUsePlayer)
+{
+  g_bUsePlayer = bUsePlayer;
+}
+
+//----------------------------------------
+bool ofxOpenNI::usingDepth()
+{
+  return (g_bHasDepth && g_bUseDepth);
+}
+
+//----------------------------------------
+bool ofxOpenNI::usingImage()
+{
+  return (g_bHasImage && g_bUseImage);
+}
+
+//----------------------------------------
+bool ofxOpenNI::usingIR()
+{
+  return (g_bHasIR && g_bUseIR);
+}
+
+//----------------------------------------
+bool ofxOpenNI::usingUser()
+{
+  return (g_bHasUser && g_bUseUser);
+}
+
+//----------------------------------------
+bool ofxOpenNI::usingAudio()
+{
+  return (g_bHasAudio && g_bUseAudio);
+}
+
+//----------------------------------------
+bool ofxOpenNI::usingPlayer()
+{
+  return (g_bHasPlayer && g_bUsePlayer);
 }

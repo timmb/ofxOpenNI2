@@ -97,7 +97,6 @@ public:
   TrackingState state;  
 
 	int id;
-	//bool skeletonTracking, skeletonCalibrating, skeletonCalibrated;
 	ofPoint center;
 	vector<ofxOpenNILimb> limbs;
 	ofMesh pointCloud;
@@ -107,4 +106,6 @@ public:
 	int getNumLimbs();
 
 	void draw();
+  
+  unsigned long stateChangedTimestamp;
 };

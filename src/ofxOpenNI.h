@@ -19,6 +19,7 @@ public:
 	void draw(int x, int y);
 	void drawRGB(int x, int y);
 	void drawIR(int x, int y);
+	void drawUserMask(int x, int y);
 
 	void setUseTexture(bool useTexture);
 
@@ -26,10 +27,12 @@ public:
 	ofPixels & getRGBPixels();
 //	ofShortPixels & getIRPixels();
 	ofPixels & getIRPixels();
+	ofShortPixels & getUserMaskPixels();
 	
 	ofTexture & getDepthTextureReference();
 	ofTexture & getRGBTextureReference();
 	ofTexture & getIRTextureReference();
+	ofTexture & getUserMaskTextureReference();
 
 	ofMesh & getPointCloud();
 	void setGeneratePCColors(bool generateColors);
@@ -58,6 +61,7 @@ public:
 	xn::DepthGenerator & getDepthGenerator();
 	xn::ImageGenerator & getImageGenerator();
 	xn::IRGenerator & getIRGenerator();
+	xn::UserGenerator & getUserGenerator();
 	xn::AudioGenerator & getAudioGenerator();
 	xn::Player & getPlayer();
 
@@ -65,6 +69,20 @@ public:
 	xn::ImageMetaData & getImageMetaData();
 	xn::IRMetaData & getIRMetaData();
 	xn::AudioMetaData & getAudioMetaData();
+
+  void useDepth(bool bUseDepth);
+	void useImage(bool bUseImage);
+	void useIR(bool bUseIR);
+  void useUser(bool bUseUser);
+	void useAudio(bool bUseAudio);
+	void usePlayer(bool bUsePlayer);
+
+  bool usingDepth();
+	bool usingImage();
+	bool usingIR();
+  bool usingUser();
+	bool usingAudio();
+	bool usingPlayer();
 
 	static string LOG_NAME;
 
@@ -78,9 +96,11 @@ private:
 	void generateDepthPixels();
 	void generateImagePixels();
 	void generateIRPixels();
+	void generateUserMaskPixels();
 	void allocateDepthBuffers();
 	void allocateRGBBuffers();
 	void allocateIRBuffers();
+	void allocateUserMaskBuffers();
 
 	static void XN_CALLBACK_TYPE onErrorStateChanged(XnStatus errorState, void* pCookie);
 
@@ -107,16 +127,26 @@ private:
 	DeviceStringProperty g_PrimaryStream;
 	DeviceParameter g_Registration;
 	DeviceParameter g_Resolution;
-	bool g_bIsDepthOn;
-	bool g_bIsImageOn;
-	bool g_bIsIROn;
-	bool g_bIsAudioOn;
-	bool g_bIsPlayerOn;
+
+	bool g_bHasDepth;
+	bool g_bHasImage;
+	bool g_bHasIR;
+  bool g_bHasUser;
+	bool g_bHasAudio;
+	bool g_bHasPlayer;
+
+  bool g_bUseDepth;
+	bool g_bUseImage;
+	bool g_bUseIR;
+  bool g_bUseUser;
+	bool g_bUseAudio;
+	bool g_bUsePlayer;
 
 	xn::Device g_Device;
 	xn::DepthGenerator g_Depth;
 	xn::ImageGenerator g_Image;
 	xn::IRGenerator g_IR;
+  xn::UserGenerator g_User;
 	xn::AudioGenerator g_Audio;
 	xn::Player g_Player;
 
@@ -139,9 +169,7 @@ private:
 	// depth
 	ofTexture depthTexture;
 	ofShortPixels depthPixels[2];
-public: //TODO: unhack
 	ofShortPixels * backDepthPixels, * currentDepthPixels;
-private:
 	float	max_depth;
 
 	// rgb
@@ -155,6 +183,11 @@ private:
 //	ofShortPixels * backIRPixels, * currentIRPixels;
 	ofPixels irPixels[2];
 	ofPixels * backIRPixels, * currentIRPixels;
+
+  // user mask
+	ofTexture userMaskTexture;
+	ofShortPixels userMaskPixels[2];
+	ofShortPixels * backUserMaskPixels, * currentUserMaskPixels;
 
 	// point cloud
 	ofMesh pointCloud;
