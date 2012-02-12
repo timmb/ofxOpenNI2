@@ -23,18 +23,18 @@ public:
 
 	void setUseTexture(bool useTexture);
 
-	ofShortPixels & getDepthPixels();
-	ofPixels & getRGBPixels();
-//	ofShortPixels & getIRPixels();
-	ofPixels & getIRPixels();
-	ofShortPixels & getUserMaskPixels();
+	ofShortPixels&  getDepthPixels();
+	ofPixels&       getRGBPixels();
+//	ofShortPixels& getIRPixels();
+	ofPixels&       getIRPixels();
+	ofShortPixels&  getUserMaskPixels();
 	
-	ofTexture & getDepthTextureReference();
-	ofTexture & getRGBTextureReference();
-	ofTexture & getIRTextureReference();
-	ofTexture & getUserMaskTextureReference();
+	ofTexture&      getDepthTextureReference();
+	ofTexture&      getRGBTextureReference();
+	ofTexture&      getIRTextureReference();
+	ofTexture&      getUserMaskTextureReference();
 
-	ofMesh & getPointCloud();
+	ofMesh& getPointCloud();
 	void setGeneratePCColors(bool generateColors);
 	void setGeneratePCTexCoords(bool generateTexCoords);
 
@@ -45,41 +45,47 @@ public:
 	bool enableCalibratedRGBDepth();
 	bool disableCalibratedRGBDepth();
 
-	ofPoint worldToProjective(const ofPoint & p);
-	ofPoint worldToProjective(const XnVector3D & p);
+	ofPoint worldToProjective(const ofPoint& p);
+	ofPoint worldToProjective(const XnVector3D& p);
 
-	ofPoint projectiveToWorld(const ofPoint & p);
-	ofPoint projectiveToWorld(const XnVector3D & p);
+	ofPoint projectiveToWorld(const ofPoint& p);
+	ofPoint projectiveToWorld(const XnVector3D& p);
 
 	ofPoint cameraToWorld(const ofVec2f& c);
 	void cameraToWorld(const vector<ofVec2f>& c, vector<ofVec3f>& w);
 
 	void addLicense(string sVendor, string sKey);
 
-	xn::Context & getXnContext();
-	xn::Device & getDevice();
-	xn::DepthGenerator & getDepthGenerator();
-	xn::ImageGenerator & getImageGenerator();
-	xn::IRGenerator & getIRGenerator();
-	xn::UserGenerator & getUserGenerator();
-	xn::AudioGenerator & getAudioGenerator();
-	xn::Player & getPlayer();
+	xn::Context&          getXnContext();
+	xn::Device&           getDevice();
+	xn::DepthGenerator&   getDepthGenerator();
+	xn::ImageGenerator&   getImageGenerator();
+	xn::IRGenerator&      getIRGenerator();
+	xn::UserGenerator&    getUserGenerator();
+	xn::HandsGenerator&   getHandsGenerator();
+	xn::GestureGenerator& getGestureGenerator();
+	xn::AudioGenerator&   getAudioGenerator();
+	xn::Player&           getPlayer();
 
-	xn::DepthMetaData & getDepthMetaData();
-	xn::ImageMetaData & getImageMetaData();
-	xn::IRMetaData & getIRMetaData();
-	xn::AudioMetaData & getAudioMetaData();
+	xn::DepthMetaData&    getDepthMetaData();
+	xn::ImageMetaData&    getImageMetaData();
+	xn::IRMetaData&       getIRMetaData();
+	xn::AudioMetaData&    getAudioMetaData();
 
-  void useDepth(bool bUseDepth);
-	void useImage(bool bUseImage);
-	void useIR(bool bUseIR);
-  void useUser(bool bUseUser);
-	void useAudio(bool bUseAudio);
-	void usePlayer(bool bUsePlayer);
+  void useDepth         (bool bUseDepth);
+	void useImage         (bool bUseImage);
+	void useIR            (bool bUseIR);
+  void useUser          (bool bUseUser);
+  void useHands         (bool bUseHands);
+  void useGesture       (bool bUseGesture);
+	void useAudio         (bool bUseAudio);
+	void usePlayer        (bool bUsePlayer);
 
   bool usingDepth();
 	bool usingImage();
 	bool usingIR();
+  bool usingHands();
+  bool usingGesture();
   bool usingUser();
 	bool usingAudio();
 	bool usingPlayer();
@@ -132,6 +138,8 @@ private:
 	bool g_bHasImage;
 	bool g_bHasIR;
   bool g_bHasUser;
+  bool g_bHasHands;
+  bool g_bHasGesture;
 	bool g_bHasAudio;
 	bool g_bHasPlayer;
 
@@ -139,32 +147,35 @@ private:
 	bool g_bUseImage;
 	bool g_bUseIR;
   bool g_bUseUser;
+  bool g_bUseHands;
+  bool g_bUseGesture;
 	bool g_bUseAudio;
 	bool g_bUsePlayer;
 
-	xn::Device g_Device;
-	xn::DepthGenerator g_Depth;
-	xn::ImageGenerator g_Image;
-	xn::IRGenerator g_IR;
-  xn::UserGenerator g_User;
-	xn::AudioGenerator g_Audio;
-	xn::Player g_Player;
+	xn::Device            g_Device;
+	xn::DepthGenerator    g_Depth;
+	xn::ImageGenerator    g_Image;
+	xn::IRGenerator       g_IR;
+  xn::UserGenerator     g_User;
+	xn::HandsGenerator    g_Hands;
+	xn::GestureGenerator  g_Gesture;
+	xn::AudioGenerator    g_Audio;
+	xn::Player            g_Player;
 
 	xn::MockDepthGenerator mockDepth;
 
-	xn::DepthMetaData g_DepthMD;
-	xn::ImageMetaData g_ImageMD;
-	xn::IRMetaData g_irMD;
-	xn::AudioMetaData g_AudioMD;
+	xn::DepthMetaData     g_DepthMD;
+	xn::ImageMetaData     g_ImageMD;
+	xn::IRMetaData        g_irMD;
+	xn::AudioMetaData     g_AudioMD;
 
-	xn::ProductionNode* g_pPrimary;
+	xn::ProductionNode*   g_pPrimary;
 
 
 	bool useTexture;
 	bool bNewPixels;
 	bool bNewFrame;
 	bool threaded;
-
 
 	// depth
 	ofTexture depthTexture;

@@ -10,11 +10,13 @@
 
 class ofxOpenNI;
 
-class ofxOpenNITracker{
+class ofxOpenNITracker
+{
 public:
 	ofxOpenNITracker();
 
-	bool setup(ofxOpenNI & openNI);
+	bool setup(ofxOpenNI& openNI,
+             XnSkeletonProfile _skeletonProfile=XN_SKEL_PROFILE_ALL);
 
 	void update();
 	void draw();
@@ -49,8 +51,8 @@ private:
 	void requestCalibration(XnUserID nID);
 	void startTracking(XnUserID nID);
 
-	static void XN_CALLBACK_TYPE User_NewUser(xn::UserGenerator& rGenerator, XnUserID nID, void* pCookie);
-	static void XN_CALLBACK_TYPE User_LostUser(xn::UserGenerator& rGenerator, XnUserID nID, void* pCookie);
+	static void XN_CALLBACK_TYPE User_NewUser(xn::UserGenerator& userGenerator, XnUserID nID, void* pCookie);
+	static void XN_CALLBACK_TYPE User_LostUser(xn::UserGenerator& userGenerator, XnUserID nID, void* pCookie);
 	static void XN_CALLBACK_TYPE UserPose_PoseDetected(xn::PoseDetectionCapability& rCapability, const XnChar* strPose, XnUserID nID, void* pCookie);
 	static void XN_CALLBACK_TYPE UserCalibration_CalibrationStart(xn::SkeletonCapability& capability, XnUserID nID, void* pCookie);
 	static void XN_CALLBACK_TYPE UserCalibration_CalibrationEnd(xn::SkeletonCapability& rCapability, XnUserID nID, XnCalibrationStatus bSuccess, void* pCookie);
@@ -67,5 +69,7 @@ private:
 	int width, height;
 
 	float smoothing_factor;
+  
+  XnSkeletonProfile skeletonProfile;
 };
 

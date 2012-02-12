@@ -7,16 +7,17 @@
 #include "ofPixels.h"
 #include "ofGraphics.h"
 
-class ofxOpenNILimb{
+class ofxOpenNILimb
+{
 public:
 	ofxOpenNILimb(XnSkeletonJoint nStartJoint, XnSkeletonJoint nEndJoint)
 	:start_joint(nStartJoint)
 	,end_joint(nEndJoint)
 	,found(false)
-	{
-	}
+	{}
 
-	ofxOpenNILimb(){};
+	ofxOpenNILimb()
+  {};
 
 	void set(XnSkeletonJoint nStartJoint, XnSkeletonJoint nEndJoint){
 		start_joint = nStartJoint;
@@ -87,12 +88,14 @@ public:
 	};
 
   enum TrackingState {
-    Invalid     = 0,
-    Lost        = 1 << 0,
-    Found       = 1 << 1,
-    NeedsPose   = 1 << 2,
-    Calibrating = 1 << 3,
-    Tracking    = 1 << 4
+    Invalid       = 0,
+    Lost          = 1 << 0,
+    Found         = 1 << 1,
+    NeedsPose     = 1 << 2,
+    Calibrating   = 1 << 3,
+    StartTracking = 1 << 4,
+    Tracking      = 1 << 5,
+    HasSkeleton   = StartTracking | Tracking
   };
   TrackingState state;  
 

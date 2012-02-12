@@ -21,7 +21,7 @@ string ofxOpenNITracker::LOG_NAME = "ofxOpenNITracker";
 // =============================================================================
 
 //----------------------------------------
-void XN_CALLBACK_TYPE ofxOpenNITracker::User_NewUser(xn::UserGenerator& rGenerator, XnUserID nID, void* pCookie){
+void XN_CALLBACK_TYPE ofxOpenNITracker::User_NewUser(xn::UserGenerator& userGenerator, XnUserID nID, void* pCookie){
 	ofLogVerbose(LOG_NAME) << "New User" << nID;
 
 	ofxOpenNITracker* tracker = static_cast<ofxOpenNITracker*>(pCookie);
@@ -36,11 +36,12 @@ void XN_CALLBACK_TYPE ofxOpenNITracker::User_NewUser(xn::UserGenerator& rGenerat
 }
 
 //----------------------------------------
-void XN_CALLBACK_TYPE ofxOpenNITracker::User_LostUser(xn::UserGenerator& rGenerator, XnUserID nID, void* pCookie){
+void XN_CALLBACK_TYPE ofxOpenNITracker::User_LostUser(xn::UserGenerator& userGenerator, XnUserID nID, void* pCookie){
 	ofLogVerbose(LOG_NAME) << "Lost user" << nID;
 
 	ofxOpenNITracker* tracker = static_cast<ofxOpenNITracker*>(pCookie);
-	rGenerator.GetSkeletonCap().Reset(nID);
+	userGenerator.GetSkeletonCap().Reset(nID);
+  tracker->users[nID];
   tracker->setUserState(nID, ofxOpenNIUser::Lost);
 }
 
@@ -83,9 +84,12 @@ ofxOpenNITracker::ofxOpenNITracker(){
 }
 
 //----------------------------------------
-bool ofxOpenNITracker::setup(ofxOpenNI & _openNI){
+bool ofxOpenNITracker::setup(ofxOpenNI & _openNI,
+                             XnSkeletonProfile _skeletonProfile)
+{
 	openNI = &_openNI;
-
+  skeletonProfile = _skeletonProfile;
+  
 	if (!openNI->getDepthGenerator().IsValid()){
 		ofLogError(LOG_NAME) << "no depth generator present";
 		return false;
@@ -171,7 +175,7 @@ bool ofxOpenNITracker::setup(ofxOpenNI & _openNI){
 
 	}
 
-	user_generator.GetSkeletonCap().SetSkeletonProfile(XN_SKEL_PROFILE_ALL);
+	user_generator.GetSkeletonCap().SetSkeletonProfile(skeletonProfile);
 
 	// needs this to allow skeleton tracking when using pre-recorded .oni or nodes init'd by code (as opposed to xml)
 	// as otherwise the image/depth nodes play but are not generating callbacks
@@ -216,10 +220,11 @@ void ofxOpenNITracker::update(){
 	user_generator.GetUsers(&userIds[0], nUsers);
   userIds.resize(nUsers);
 
-  unsigned int stateHasMask = (ofxOpenNIUser::Found |
-                               ofxOpenNIUser::NeedsPose |
-                               ofxOpenNIUser::Calibrating |
-                               ofxOpenNIUser::Tracking);
+  unsigned int stateHasMask = (ofxOpenNIUser::Found         |
+                               ofxOpenNIUser::NeedsPose     |
+                               ofxOpenNIUser::Calibrating   |
+                               ofxOpenNIUser::StartTracking |
+                               ofxOpenNIUser::Tracking      );
 
 	for(int i = 0; i < nUsers; ++i) {
     unsigned int nID = userIds[i];
@@ -235,7 +240,7 @@ void ofxOpenNITracker::update(){
 			if (useMaskPixels) updateUserPixels(user);
     }
 
-		if(user.state == ofxOpenNIUser::Tracking) {
+		if(user.state & ofxOpenNIUser::HasSkeleton) {
 			for(int j=0;j<ofxOpenNIUser::NumLimbs;j++){
 				XnSkeletonJointPosition a,b;
 				user_generator.GetSkeletonCap().GetSkeletonJointPosition(nID, user.limbs[j].start_joint, a);
@@ -255,12 +260,12 @@ void ofxOpenNITracker::update(){
 		}
 	}
 
-	map<XnUserID, ofxOpenNIUser>::iterator it;
-	for(it=users.begin();it!=users.end();it++){
-		if(std::find(userIds.begin(), userIds.end(), it->first)==userIds.end()){
-			users.erase(it);
-		}
-	}
+  map<XnUserID, ofxOpenNIUser>::iterator it;
+  for(it=users.begin();it!=users.end();it++){
+    if(std::find(userIds.begin(), userIds.end(), it->first)==userIds.end()){
+      users.erase(it);
+    }
+  }
 }
 
 //----------------------------------------
@@ -364,7 +369,7 @@ void ofxOpenNITracker::requestCalibration(XnUserID nID) {
 void ofxOpenNITracker::startTracking(XnUserID nID) {
 	ofLogVerbose(LOG_NAME) << "Start tracking user" << nID;
 	openNI->getUserGenerator().GetSkeletonCap().StartTracking(nID);
-  setUserState(nID, ofxOpenNIUser::Tracking);
+  setUserState(nID, ofxOpenNIUser::StartTracking);
 }
 
 //----------------------------------------
@@ -458,7 +463,7 @@ ofxOpenNIUser::TrackingState ofxOpenNITracker::getUserState(unsigned int nID)
 //----------------------------------------
 void ofxOpenNITracker::setUserState(unsigned int nID, ofxOpenNIUser::TrackingState userState)
 {
-  if (users.find(nID) != users.end())
+//  if (users.find(nID) != users.end())
   {
     users[nID].state = userState;
     users[nID].stateChangedTimestamp = ofGetSystemTime();
