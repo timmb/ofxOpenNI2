@@ -1,6 +1,6 @@
 <Modules>
-  <Module path="libnimMockNodes.dylib" />
-  <Module path="libnimCodecs.dylib" />
-  <Module path="libnimRecorder.dylib" />
-  <Module path="libXnDeviceSensorV2KM.dylib" configDir="./../Resources/openni" />
+  <Module path="../MacOS/libnimMockNodes.dylib" />
+  <Module path="../MacOS/libnimCodecs.dylib" />
+  <Module path="../MacOS/libnimRecorder.dylib" />
+  <Module path="../MacOS/libXnDeviceSensorV2KM.dylib" configDir="../Resources/openni" />
 </Modules>
