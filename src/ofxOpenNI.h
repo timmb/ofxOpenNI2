@@ -10,7 +10,14 @@
 class ofxOpenNI: public ofThread{
 public:
 	ofxOpenNI();
-
+	~ofxOpenNI();
+	
+	// Prevent destruction and duplication of this object through assignment.
+private:
+	ofxOpenNI(ofxOpenNI const& other);
+	ofxOpenNI& operator=(ofxOpenNI const& other);
+	
+public:
 	bool setupFromXML(string xml, bool threaded=true);
 	bool setupFromRecording(string recording, bool threaded=true);
 

@@ -48,6 +48,15 @@ ofxOpenNI::ofxOpenNI()
 }
 
 //--------------------------------------------------------------
+ofxOpenNI::~ofxOpenNI()
+{
+	if (threaded)
+	{
+		waitForThread(true);
+	}
+}
+
+//--------------------------------------------------------------
 void
 ofxOpenNI::initConstants()
 {
